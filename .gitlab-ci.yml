@@ -3,7 +3,6 @@ services:
   - docker:19.03.12-dind
 
 stages:
-  - build
   - test
 
 variables:
@@ -11,21 +10,9 @@ variables:
   DOCKER_HOST: tcp://docker:2375
   DOCKER_TLS_CERTDIR: ""
 
-
-build:
-  stage: build
-  before_script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-  script:
-    - docker build --pull -t $CONTAINER_RELEASE_IMAGE .
-    - docker push $CONTAINER_RELEASE_IMAGE
-  only:
-    variables:
-      - $BUILD_DOCKER_IMAGE
-
 checker:
     stage: test
     image:
-        name: gitlab.cs.pub.ro:5050/vmchecker/vmchecker-next-assignment
+        name: gitlab.cs.pub.ro:5050/compilatoare/tema-3-generare-cod:latest
     script:
         - echo ""
