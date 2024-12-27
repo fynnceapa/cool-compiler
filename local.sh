@@ -9,7 +9,7 @@ cd "$(dirname "$0")" || exit 1
 RED='\033[0;31m'
 NC='\033[0m'
 
-DEFAULT_IMAGE_NAME="$(basename "$(pwd)")"
+DEFAULT_IMAGE_NAME="compilatoare/tema-3-generare-cod"
 DEFAULT_TAG='latest'
 DEFAULT_REGISTRY='gitlab.cs.pub.ro:5050'
 
