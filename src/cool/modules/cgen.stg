@@ -1,0 +1,365 @@
+// StringTemplate group for Cool MIPS code generation
+
+program(dataSection, textSection) ::= <<
+    .data
+    .align  2
+    .globl  class_nameTab
+    .globl  Int_protObj
+    .globl  String_protObj
+    .globl  bool_const0
+    .globl  bool_const1
+    .globl  Main_protObj
+    .globl  _int_tag
+    .globl  _string_tag
+    .globl  _bool_tag
+<dataSection>
+    .globl  heap_start
+heap_start:
+    .word   0
+    .text
+    .globl  Int_init
+    .globl  String_init
+    .globl  Bool_init
+    .globl  Main_init
+    .globl  Main.main
+<textSection>
+>>
+
+classTags(intTag, stringTag, boolTag) ::= <<
+_int_tag:
+    .word   <intTag>
+_string_tag:
+    .word   <stringTag>
+_bool_tag:
+    .word   <boolTag>
+>>
+
+stringConst(label, classTag, size, dispTab, lengthLabel, value) ::= <<
+<label>:
+    .word   <classTag>
+    .word   <size>
+    .word   <dispTab>
+    .word   <lengthLabel>
+    .asciiz "<value>"
+    .align  2
+>>
+
+intConst(label, classTag, value) ::= <<
+<label>:
+    .word   <classTag>
+    .word   4
+    .word   Int_dispTab
+    .word   <value>
+>>
+
+boolConst(label, classTag, value) ::= <<
+<label>:
+    .word   <classTag>
+    .word   4
+    .word   Bool_dispTab
+    .word   <value>
+>>
+
+classNameTab(entries) ::= <<
+class_nameTab:
+<entries; separator="\n">
+>>
+
+classNameEntry(label) ::= <<
+    .word   <label>
+>>
+
+classObjTab(entries) ::= <<
+class_objTab:
+<entries; separator="\n">
+>>
+
+classObjEntry(protLabel, initLabel) ::= <<
+    .word   <protLabel>
+    .word   <initLabel>
+>>
+
+protObj(name, classTag, size, dispTab, attrs) ::= <<
+<name>_protObj:
+    .word   <classTag>
+    .word   <size>
+    .word   <name>_dispTab
+<attrs>
+>>
+
+protObjAttr(value) ::= <<
+    .word   <value>
+>>
+
+dispTab(name, methods) ::= <<
+<name>_dispTab:
+<methods; separator="\n">
+>>
+
+dispTabEntry(label) ::= <<
+    .word   <label>
+>>
+
+initMethod(name, parentInit, attrInits) ::= <<
+<name>_init:
+    addiu   $sp $sp -12
+    sw      $fp 12($sp)
+    sw      $s0 8($sp)
+    sw      $ra 4($sp)
+    addiu   $fp $sp 4
+    move    $s0 $a0
+<if(parentInit)>
+    jal     <parentInit>_init
+<endif>
+<attrInits>
+    move    $a0 $s0
+    lw      $fp 12($sp)
+    lw      $s0 8($sp)
+    lw      $ra 4($sp)
+    addiu   $sp $sp 12
+    jr      $ra
+>>
+
+method(className, methodName, localsSize, body, paramsSize) ::= <<
+<className>.<methodName>:
+    addiu   $sp $sp -12
+    sw      $fp 12($sp)
+    sw      $s0 8($sp)
+    sw      $ra 4($sp)
+    addiu   $fp $sp 4
+<if(localsSize)>
+    addiu   $sp $sp -<localsSize>   # locals alloc
+<endif>
+    move    $s0 $a0
+<body>
+<if(localsSize)>
+    addiu   $sp $sp <localsSize>    # locals free
+<endif>
+    lw      $fp 12($sp)
+    lw      $s0 8($sp)
+    lw      $ra 4($sp)
+    addiu   $sp $sp 12
+<if(paramsSize)>
+    addiu   $sp $sp <paramsSize>    # params free
+<endif>
+    jr      $ra
+>>
+
+loadInt(label) ::= <<
+    la      $a0 <label>
+>>
+
+loadString(label) ::= <<
+    la      $a0 <label>
+>>
+
+loadBool(label) ::= <<
+    la      $a0 <label>
+>>
+
+loadSelf() ::= <<
+    move    $a0 $s0
+>>
+
+loadAttr(offset) ::= <<
+    lw      $a0 <offset>($s0)
+>>
+
+loadLocal(offset) ::= <<
+    lw      $a0 <offset>($fp)
+>>
+
+loadParam(offset) ::= <<
+    lw      $a0 <offset>($fp)
+>>
+
+storeAttr(offset) ::= <<
+    sw      $a0 <offset>($s0)
+>>
+
+storeLocal(offset) ::= <<
+    sw      $a0 <offset>($fp)
+>>
+
+push() ::= <<
+    sw      $a0 0($sp)
+    addiu   $sp $sp -4
+>>
+
+pop(reg) ::= <<
+    lw      <reg> 4($sp)
+    addiu   $sp $sp 4
+>>
+
+ifStmt(condition, elseLabel, endLabel, thenBody, elseBody) ::= <<
+<condition>
+    lw      $t1 12($a0)     # bool slot
+    beqz    $t1 <elseLabel>
+<thenBody>
+    b       <endLabel>
+<elseLabel>:
+<elseBody>
+<endLabel>:
+>>
+
+whileStmt(loopLabel, endLabel, condition, body) ::= <<
+<loopLabel>:
+<condition>
+    lw      $t1 12($a0)     # bool slot
+    beqz    $t1 <endLabel>
+<body>
+    b       <loopLabel>
+<endLabel>:
+    move    $a0 $zero
+>>
+
+dispatch(dispatchLabel, receiver, fileName, lineNo, dispTabOffset) ::= <<
+<receiver>
+    bnez    $a0 <dispatchLabel>
+    la      $a0 <fileName>
+    li      $t1 <lineNo>
+    jal     _dispatch_abort
+<dispatchLabel>:
+    lw      $t1 8($a0)   # dispatch table
+    lw      $t1 <dispTabOffset>($t1)   # method offset
+    jalr    $t1
+>>
+
+staticDispatch(dispatchLabel, receiver, fileName, lineNo, dispTabName, dispTabOffset) ::= <<
+<receiver>
+    bnez    $a0 <dispatchLabel>
+    la      $a0 <fileName>
+    li      $t1 <lineNo>
+    jal     _dispatch_abort
+<dispatchLabel>:
+    la      $t1 <dispTabName>   # dispatch table
+    lw      $t1 <dispTabOffset>($t1)   # method offset
+    jalr    $t1
+>>
+
+newObject(protLabel, initLabel) ::= <<
+    la      $a0 <protLabel>
+    jal     Object.copy
+    jal     <initLabel>
+>>
+
+newSelfType(objTabOffset) ::= <<
+    lw      $t1 0($s0)          # class tag
+    sll     $t1 $t1 3           # * 8
+    la      $t2 class_objTab
+    addu    $t1 $t1 $t2
+    lw      $a0 0($t1)          # protObj
+    sw      $t1 0($sp)
+    addiu   $sp $sp -4
+    jal     Object.copy
+    lw      $t1 4($sp)
+    addiu   $sp $sp 4
+    lw      $t1 4($t1)          # init
+    jalr    $t1
+>>
+
+arithmeticOp(leftPush, rightEval, op) ::= <<
+<leftPush>
+<rightEval>
+    jal     Object.copy
+    lw      $t1 4($sp)
+    addiu   $sp $sp 4
+    lw      $t1 12($t1)     # int slot
+    lw      $t2 12($a0)     # int slot
+    <op>    $t1 $t1 $t2
+    sw      $t1 12($a0)     # int slot
+>>
+
+compareOp(leftPush, rightEval, op, trueLabel, endLabel) ::= <<
+<leftPush>
+<rightEval>
+    lw      $t1 4($sp)
+    addiu   $sp $sp 4
+    lw      $t1 12($t1)     # int slot
+    lw      $t2 12($a0)     # int slot
+    <op>    $t1 $t2 <trueLabel>
+    la      $a0 bool_const0
+    b       <endLabel>
+<trueLabel>:
+    la      $a0 bool_const1
+<endLabel>:
+>>
+
+equalityTest(leftPush, rightEval, equalLabel, endLabel) ::= <<
+<leftPush>
+<rightEval>
+    lw      $t1 4($sp)
+    addiu   $sp $sp 4
+    move    $t2 $a0
+    beq     $t1 $t2 <equalLabel>
+    la      $a0 bool_const1
+    la      $a1 bool_const0
+    jal     equality_test
+    b       <endLabel>
+<equalLabel>:
+    la      $a0 bool_const1
+<endLabel>:
+>>
+
+notOp(expr) ::= <<
+<expr>
+    lw      $t1 12($a0)     # bool slot
+    la      $a0 bool_const1
+    beqz    $t1 not_done
+    la      $a0 bool_const0
+not_done:
+>>
+
+negOp(expr) ::= <<
+<expr>
+    jal     Object.copy
+    lw      $t1 12($a0)
+    neg     $t1 $t1
+    sw      $t1 12($a0)
+>>
+
+isvoidOp(expr, trueLabel, endLabel) ::= <<
+<expr>
+    beqz    $a0 <trueLabel>
+    la      $a0 bool_const0
+    b       <endLabel>
+<trueLabel>:
+    la      $a0 bool_const1
+<endLabel>:
+>>
+
+caseVoidCheck(expr, caseLabel, fileName, lineNo) ::= <<
+<expr>
+    bnez    $a0 <caseLabel>
+    la      $a0 <fileName>
+    li      $t1 <lineNo>
+    jal     _case_abort2
+<caseLabel>:
+>>
+
+caseBranch(branchLabel, nextLabel, minTag, maxTag, body) ::= <<
+<branchLabel>:
+    blt     $t1 <minTag> <nextLabel>
+    bgt     $t1 <maxTag> <nextLabel>
+<body>
+    b       endcase
+>>
+
+caseNoMatch(endLabel) ::= <<
+    lw      $a0 case_temp
+    jal     _case_abort
+<endLabel>:
+>>
+
+allocLocal(size) ::= <<
+    addiu   $sp $sp -<size>
+>>
+
+freeLocal(size) ::= <<
+    addiu   $sp $sp <size>
+>>
+
+seq(first, rest) ::= <<
+<first>
+<rest>
+>>
