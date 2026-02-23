@@ -4,7 +4,7 @@ SRC_PATH="../src"
 
 setup()
 {
-    cp -r --no-clobber $SRC_PATH/* .
+    cp -rn $SRC_PATH/* .
     make build
     make compiler
 }
